@@ -1,16 +1,22 @@
 {
-    "name": "JSCAD Development",
-    "dockerComposeFile": "docker-compose.yml",
-    "service": "jscad",
-    "workspaceFolder": "/workspace/openjscad",
-    "forwardPorts": [3000, 8081],
-    "remoteUser": "node",
-    "shutdownAction": "stopCompose",
-    "overrideCommand": true,
-    "customizations": {
-        "vscode": {
-            "extensions": []
-        }
-    },
-    "postStartCommand": "node /workspace/openjscad/packages/web/devserver.js"
-} 
+  "name": "JSCAD Development",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "jscad",
+  "workspaceFolder": "/workspace/openjscad",
+  "forwardPorts": [3000, 8081],
+  "remoteUser": "node",
+  "shutdownAction": "stopCompose",
+  "overrideCommand": true,
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-vscode.live-server"],
+      "settings": {
+        "workbench.startupEditor": "none",
+        "liveServer.settings.host": "localhost",
+        "liveServer.settings.port": 8081,
+        "liveServer.settings.fullReload": true
+      }
+    }
+  },
+  "postStartCommand": "node /workspace/openjscad/packages/web/devserver.js"
+}

@@ -1,0 +1,26 @@
+{
+  "parserOptions": {
+    "ecmaVersion": 2020,
+    "sourceType": "module"
+  },
+  "env": {
+    "browser": true,
+    "es6": true
+  },
+  "globals": {
+    "CSG": "readonly",
+    "CAG": "readonly",
+    "cube": "readonly",
+    "sphere": "readonly",
+    "cylinder": "readonly",
+    "union": "readonly",
+    "difference": "readonly",
+    "intersection": "readonly"
+  },
+  "rules": {
+    "no-unused-vars": "warn",
+    "no-undef": "error",
+    "semi": ["error", "always"],
+    "space-before-function-paren": ["error", "always"]
+  }
+}

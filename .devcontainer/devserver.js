@@ -2,100 +2,101 @@ const budo = require('budo')
 const path = require('path')
 const copydir = require('copy-dir')
 const fs = require('fs')
-const DocBlock = require('docblock')
-const docBlock = new DocBlock()
-console.log('Current working directory:', process.cwd())
-console.log('Node version:', process.version)
-console.log('Platform:', process.platform)
-console.log('Environment:', process.env.NODE_ENV || 'development')
+
+// Add timestamp function
+const getTimestamp = () => `[${new Date().toISOString()}]`
+
+console.log(`${getTimestamp()} 🚀 Starting devserver...`)
+console.log(`${getTimestamp()} 📂 Current working directory:`, process.cwd())
+console.log(`${getTimestamp()} 🔧 Node version:`, process.version)
+console.log(`${getTimestamp()} 💻 Platform:`, process.platform)
+console.log(`${getTimestamp()} 🌍 Environment:`, process.env.NODE_ENV || 'development')
 
 const examplesSrc = path.resolve('/workspace/openjscad/packages/web/examples')
-const ignoreExamples = { Imports: 1, Projects: 1 }
+console.log(`${getTimestamp()} 📁 Examples source directory:`, examplesSrc)
 
-// Start budo server
+// Add base directory constant
+const baseDir = '/workspace/openjscad/packages/web'
+console.log(`${getTimestamp()} 📁 Base directory:`, baseDir)
+
+// Update server configuration to serve static files
 const server = budo('/workspace/openjscad/packages/web/demo.js', {
-  live: true,
+  live: {
+    reload: false  // Disable automatic reload
+  },
+  stream: process.stdout,
+  watchGlob: ['examples/**/*.{js,html,css}', 'devserver.js'],
   port: 8081,
-  css: './css/demo.css'
+  dir: baseDir,
+  serve: 'demo.js'
 })
 
 // Handle server events
-server.on('connect', function(ev) {
-  console.log('Server started on port:', ev.port)
+server.on('connect', function (ev) {
+  console.log(`${getTimestamp()} ✅ Server started on port:`, ev.port)
   processExamples()
 })
 
-server.on('reload', function() {
-  console.log('Server reloaded')
+server.on('watch', function (ev, file) {
+  console.log(`${getTimestamp()} 🔍 Watching event:`, ev, 'file:', file)
+  // Your custom logic here
+  if (shouldReload(file)) {
+    server.reload()  // Manually trigger reload
+  } else {
+    console.log(`${getTimestamp()} ⏭️ Skipping reload for:`, file)
+  }
+})
+
+server.on('reload', function () {
+  console.log(`${getTimestamp()} 🔄 Server reloaded, processing examples...`)
   processExamples()
 })
 
 function processExamples() {
-  try {
-    copyAndProcessExamples(examplesSrc)
-  } catch (error) {
-    console.error('Error processing examples:', error)
-  }
-}
-
-function copyAndProcessExamples(examplesSrc) {
-  const examples = { 'Creating Shapes': [], 'Manipulating Shapes': [], Colors: [], Parameters: [], Other: [] }
+  console.log(`${getTimestamp()} 🚀 Starting examples processing...`)
+  const examples = { 'Working Files': [], Other: [] }
   const examplesDist = 'examples'
-  if (fs.existsSync(examplesSrc)) {
-    console.log('Copying Examples...', examplesSrc)
-    copydir.sync(examplesSrc, examplesDist, { mode: false })
+  try {
     processExamplesInDirectory(examplesDist, examples)
-    sortExamples(examples)
-    fs.writeFile('examples/examples.json', JSON.stringify(examples), (err) => {
-      if (err) return console.log(err)
-    })
-  } else {
-    return console.log('Examples directory does not exist: ' + examplesSrc)
+  } catch (error) {
+    console.error(`${getTimestamp()} ❌ Error processing examples:`, error)
   }
+  console.log(`${getTimestamp()} 💾 Writing examples.json...`)
+  fs.writeFile(examplesSrc + '/examples.json', JSON.stringify(examples), (err) => {
+    if (err) {
+      console.error(`${getTimestamp()} ❌ Error writing examples.json:`, err)
+      return
+    }
+    console.log(`${getTimestamp()} ✅ Successfully wrote examples.json`)
+  })
 }
 
 function processExamplesInDirectory(dir, examples) {
+  console.log(`${getTimestamp()} 📂 Processing directory:`, dir)
   const files = fs.readdirSync(dir)
+  console.log(`${getTimestamp()} 📑 Found ${files.length} files in directory`)
+
   files.forEach((fileName) => {
     const filePath = path.join(dir, fileName)
     if (fs.lstatSync(filePath).isDirectory()) {
+      console.log(`${getTimestamp()} 📁 Found subdirectory: ${fileName}`)
       processExamplesInDirectory(filePath, examples)
     } else if (filePath.endsWith('.js')) {
+      console.log(`${getTimestamp()} 📄 Processing JS file: ${fileName}`)
       processExamplesFile(filePath, examples)
+    } else {
+      console.log(`${getTimestamp()} ⏭️ Skipping non-JS file: ${fileName}`)
     }
   })
 }
 
 function processExamplesFile(filePath, examples) {
-  const result = docBlock.parse(fs.readFileSync(filePath), 'js')
-  if (result.length) {
-    const category = result[0].tags.category
-
-    if (category in ignoreExamples) {
-      console.log(`Ignoring example ${filePath}`)
-      return
-    }
-
-    const title = result[0].title
-    const description = result[0].description
-    const sort = parseInt(result[0].tags.skillLevel)
-    if (!(category in examples)) {
-      const categories = Object.keys(examples)
-      console.error(`ERR: Example ${filePath} did not have a valid category set. Valid categories are ${categories}`)
-      return
-    }
-    examples[category].push({ title, filePath, sort, description })
-  }
+  console.log(`${getTimestamp()} 📝 Processing file:`, filePath)
+  const title = filePath.split('/').pop()
+  const description = filePath
+  examples['Working Files'].push({ title, filePath, description })
 }
 
-function sortExamples(examples) {
-  for (const category in examples) {
-    if (!Object.prototype.hasOwnProperty.call(examples, category)) continue
-    examples[category] = examples[category].sort((a, b) => {
-      if (a.sort === b.sort) {
-        return a.title > b.title ? 1 : -1
-      }
-      return a.sort - b.sort
-    })
-  }
+function shouldReload(filePath) {
+  return filePath.endsWith('.js')
 }
