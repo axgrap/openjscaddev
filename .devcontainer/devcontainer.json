@@ -5,26 +5,5 @@
   "workspaceFolder": "/workspace/openjscad/packages/web/examples/",
   "forwardPorts": [3000, 8081],
   "remoteUser": "node",
-  "shutdownAction": "stopCompose",
-  "overrideCommand": true,
-  "customizations": {
-    "vscode": {
-      "extensions": [
-        "ms-vscode.live-server",
-        "auchenberg.vscode-browser-preview"
-      ],
-      "settings": {
-        "workbench.startupEditor": "none",
-        "liveServer.settings.host": "0.0.0.0",
-        "liveServer.settings.port": 8081,
-        "liveServer.settings.fullReload": true,
-        "browser-preview.startUrl": "http://localhost:8081",
-        "browser-preview.verbose": true
-      }
-    }
-  },
-  "postStartCommand": "node /workspace/openjscad/packages/web/devserver.js",
-  "postAttachCommand": {
-    "Open Preview": "command:browser-preview.openPreview"
-  }
+  "shutdownAction": "stopCompose"
 }

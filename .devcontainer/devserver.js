@@ -19,7 +19,21 @@ console.log(`${getTimestamp()} 📁 Examples source directory:`, examplesSrc)
 const baseDir = '/workspace/openjscad/packages/web'
 console.log(`${getTimestamp()} 📁 Base directory:`, baseDir)
 
-// Update server configuration to serve static files
+// Add this near the top of the file with other constants
+const knownFiles = new Set();
+
+// Copy favicon if it doesn't exist
+const faviconPath = path.join(baseDir, 'favicon.ico')
+if (!fs.existsSync(faviconPath)) {
+  try {
+    fs.copyFileSync(path.join(baseDir, 'images', 'favicon.ico'), faviconPath)
+    console.log(`${getTimestamp()} 🎨 Copied favicon.ico`)
+  } catch (error) {
+    console.warn(`${getTimestamp()} ⚠️ Could not copy favicon:`, error)
+  }
+}
+
+// Update server configuration to include title and favicon
 const server = budo('/workspace/openjscad/packages/web/demo.js', {
   live: {
     reload: false
@@ -29,6 +43,8 @@ const server = budo('/workspace/openjscad/packages/web/demo.js', {
   port: 8081,
   dir: baseDir,
   serve: 'demo.js',
+  css: './css/demo.css',
+  title: 'JSCAD Editor', // Add custom title
   staticOptions: {
     // Configure proper MIME types
     setHeaders: function (res, path) {
@@ -36,7 +52,18 @@ const server = budo('/workspace/openjscad/packages/web/demo.js', {
         res.setHeader('Content-Type', 'text/css')
       }
     }
-  }
+  },
+  middleware: [
+    // Add middleware to inject favicon
+    (req, res, next) => {
+      if (req.url === '/favicon.ico') {
+        res.setHeader('Content-Type', 'image/x-icon');
+        fs.createReadStream(path.join(baseDir, 'favicon.ico')).pipe(res);
+      } else {
+        next();
+      }
+    }
+  ]
 })
 
 // Handle server events
@@ -63,7 +90,7 @@ server.on('reload', function () {
 function processExamples() {
   console.log(`${getTimestamp()} 🚀 Starting examples processing...`)
   const examples = { 'Working Files': [], Other: [] }
-  const examplesDist = baseDir + '/examples'
+  const examplesDist = 'examples'
   try {
     processExamplesInDirectory(examplesDist, examples)
   } catch (error) {
@@ -87,6 +114,7 @@ function processExamplesInDirectory(dir, examples) {
     return
   }
   console.log(`${getTimestamp()} 📂 Processing directory:`, dir)
+
   const files = fs.readdirSync(dir)
   console.log(`${getTimestamp()} 📑 Found ${files.length} files in directory`)
 
@@ -104,13 +132,25 @@ function processExamplesInDirectory(dir, examples) {
   })
 }
 
+// Modify the processExamplesFile function to track files
 function processExamplesFile(filePath, examples) {
   console.log(`${getTimestamp()} 📝 Processing file:`, filePath)
   const title = filePath.split('/').pop()
   const description = filePath
   examples['Working Files'].push({ title, filePath, description })
+  // Add file to known files set
+  knownFiles.add(filePath)
 }
 
+// Implement the shouldReload function
 function shouldReload(filePath) {
-  return filePath.endsWith('.js')
+  // If this is a new file we haven't seen before, return true
+  if (!knownFiles.has(filePath)) {
+    console.log(`${getTimestamp()} 🆕 New file detected: ${filePath}`)
+    return true;
+  }
+  console.log(`${getTimestamp()} ♻️ Existing file modified: ${filePath}`)
+  return false;
 }
+
+processExamples()

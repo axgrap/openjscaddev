@@ -20,7 +20,7 @@ COPY --from=deps-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 # COPY --from=deps-builder /usr/local/bin/@jscad /usr/local/bin/@jscad
 COPY devserver.js /workspace/openjscad/packages/web/devserver.js
 # Set working directory
-WORKDIR /workspace/openjscad
+WORKDIR /workspace/openjscad/packages/web
 
 RUN rm -rf /workspace/openjscad/.git
 # Switch back to node user
@@ -34,10 +34,5 @@ USER root
 RUN chown -R node:node /workspace/openjscad
 
 USER node
-
-# Create a startup script
-# RUN echo '#!/bin/sh\ncd /workspace/openjscad/packages/web && HOST=0.0.0.0 npm run dev' > /home/node/startup.sh && \
-#     chmod +x /home/node/startup.sh
-
-# Set the entrypoint to the startup script
-# ENTRYPOINT ["/home/node/startup.sh"]
+RUN chmod +x /workspace/openjscad/packages/web/devserver.js
+ENTRYPOINT ["node", "/workspace/openjscad/packages/web/devserver.js", "&"]

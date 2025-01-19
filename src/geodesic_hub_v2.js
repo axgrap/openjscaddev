@@ -1,10 +1,12 @@
 
-    const { cylinder, cuboid } = require('@jscad/modeling').primitives;
+const { cylinder, cuboid } = require('@jscad/modeling').primitives;
 const { union, subtract } = require('@jscad/modeling').booleans;
 const { translate, rotateX, rotateY, rotateZ } = require('@jscad/modeling').transforms;
 const { extrudeLinear } = require('@jscad/modeling').extrusions;
 const { geom2, geom3 } = require('@jscad/modeling').geometries;
 const { degToRad } = require('@jscad/modeling').utils;
+
+
 
 const HUB_CONFIGS = {
     '1v1': {
@@ -26,15 +28,21 @@ const HUB_CONFIGS = {
 
 function getParameterDefinitions() {
     return [
-        { name: 'part', type: 'choice', values: ['hubs', 'bottoms', 'all'], 
-          caption: 'Part to Generate', initial: 'all' },
-        { name: 'dome_type', type: 'choice', values: ['1v1', '2v1', '2v2'], 
-          caption: 'Dome Type', initial: '1v1' },
+        {
+            name: 'part', type: 'choice', values: ['hubs', 'bottoms', 'all'],
+            caption: 'Part to Generate', initial: 'all'
+        },
+        {
+            name: 'dome_type', type: 'choice', values: ['1v1', '2v1', '2v2'],
+            caption: 'Dome Type', initial: '1v1'
+        },
         { name: 'lumber_height', type: 'float', initial: 12.2, caption: 'Strut Height (mm)' },
         { name: 'lumber_width', type: 'float', initial: 12.2, caption: 'Strut Width (mm)' },
         { name: 'inset_depth', type: 'float', initial: 20, caption: 'Socket Depth (mm)' },
-        { name: 'bracket_type', type: 'choice', values: ['rectangular', 'circular'], 
-          caption: 'Strut Shape', initial: 'circular' },
+        {
+            name: 'bracket_type', type: 'choice', values: ['rectangular', 'circular'],
+            caption: 'Strut Shape', initial: 'circular'
+        },
         { name: 'wall_thickness', type: 'float', initial: 4, caption: 'Wall Thickness (mm)' }
     ];
 }
@@ -71,34 +79,34 @@ function createBracket(params, negative = false) {
         const outer_width = lumber_height + (wall_thickness * 2);
         const outer_height = lumber_width + (wall_thickness * 2);
         const outer_depth = inset_depth + (wall_thickness * 2);
-        
-        return negative ? 
-            translate([0, 0, wall_thickness/2],
+
+        return negative ?
+            translate([0, 0, wall_thickness / 2],
                 cuboid({
                     size: [lumber_height, lumber_width, inset_depth + 15],
-                    center: [0, 0, (inset_depth + 15)/2]
+                    center: [0, 0, (inset_depth + 15) / 2]
                 })
             ) :
             cuboid({
                 size: [outer_width, outer_height, outer_depth],
-                center: [0, 0, outer_depth/2]
+                center: [0, 0, outer_depth / 2]
             });
     }
-    
+
     // Circular bracket
     const outer_radius = (lumber_height / 2) + wall_thickness;
     return negative ?
-        translate([0, 0, wall_thickness/2],
+        translate([0, 0, wall_thickness / 2],
             cylinder({
                 radius: lumber_height / 2,
                 height: inset_depth + 15,
-                center: [0, 0, (inset_depth + 15)/2]
+                center: [0, 0, (inset_depth + 15) / 2]
             })
         ) :
         cylinder({
             radius: outer_radius,
             height: inset_depth + wall_thickness,
-            center: [0, 0, (inset_depth + wall_thickness)/2]
+            center: [0, 0, (inset_depth + wall_thickness) / 2]
         });
 }
 
@@ -110,28 +118,28 @@ function createRotatedBracket(params, {
     negative = false,
     bracket_label = ''
 }) {
-    console.log('Creating rotated bracket:', { 
+    console.log('Creating rotated bracket:', {
         params,
         rotation_angle: rotation_angle,
         offset_angle: offset_angle
     });
-    
-    const rotated_calculated_height = (Math.sin(toRadians(rotation_angle)) * params.lumber_height) + 
-                                    params.wall_thickness * 2;
-    
+
+    const rotated_calculated_height = (Math.sin(toRadians(rotation_angle)) * params.lumber_height) +
+        params.wall_thickness * 2;
+
     let bracket = createBracket(params, negative, bracket_label);
     bracket = rotateX(toRadians(rotation_angle), bracket);
-//    bracket = translate([
-//        center_polygon_radius + params.wall_thickness * 2,
-//        0,
-//        rotated_calculated_height - (center_polygon_height/2)
-//
-//    ], bracket);
-    
-    
+    //    bracket = translate([
+    //        center_polygon_radius + params.wall_thickness * 2,
+    //        0,
+    //        rotated_calculated_height - (center_polygon_height/2)
+    //
+    //    ], bracket);
+
+
     //TODO
     bracket = rotateZ(toRadians(offset_angle), bracket);
-    
+
     return bracket;
 }
 
@@ -144,7 +152,7 @@ function createCenterPolygon(params, {
 }) {
     const inset_height = height + wallThickness + 5;
     const inset_radius = radius - wallThickness;
-    
+
     if (negative) {
         const polygon = createRegularPolygon(sides, inset_radius);
         return translate([0, 0, wallThickness],
@@ -152,11 +160,11 @@ function createCenterPolygon(params, {
         );
     } else {
         const basePolygon = createRegularPolygon(sides, radius);
-        return extrudeLinear({ 
-            height: height/3,
+        return extrudeLinear({
+            height: height / 3,
             twistAngle: 0,
             twistSteps: 1,
-            scale: 1.5 
+            scale: 1.5
         }, basePolygon);
     }
 }
@@ -171,15 +179,15 @@ function createConnector(params, {
     bracket_labels = [],
     solid_center = false
 }) {
-    console.log('Creating connector:', { 
+    console.log('Creating connector:', {
         params,
         sides: number_of_sides,
         bracket_count: bracket_count
     });
-    
+
     bracket_count = bracket_count || number_of_sides;
     let parts = [];
-    
+
     if (!solid_center) {
         parts.push(
             rotateZ(toRadians(36),
@@ -192,7 +200,7 @@ function createConnector(params, {
             )
         );
     }
-    
+
     parts.push(
         createCenterPolygon(params, {
             sides: 5,
@@ -201,7 +209,7 @@ function createConnector(params, {
             wallThickness: params.wall_thickness
         })
     );
-    
+
     for (let i = 0; i < bracket_count; i++) {
         const bracketParams = {
             center_polygon_radius,
@@ -212,12 +220,12 @@ function createConnector(params, {
         };
         parts.push(createRotatedBracket(params, bracketParams));
     }
-    
+
     let result = union(parts);
-    
+
     if (!solid_center) {
         let cutouts = [];
-        
+
         cutouts.push(
             rotateZ(toRadians(36),
                 createCenterPolygon(params, {
@@ -229,7 +237,7 @@ function createConnector(params, {
                 })
             )
         );
-        
+
         for (let i = 0; i < bracket_count; i++) {
             cutouts.push(
                 createRotatedBracket(params, {
@@ -246,7 +254,7 @@ function createConnector(params, {
         //result = subtract(result, ...cutouts);
         result = union(result, ...cutouts);
     }
-    
+
     return result;
 }
 
@@ -255,16 +263,16 @@ function createHub(params, type) {
     const config = HUB_CONFIGS[type];
     console.log('Hub Config:', config);
     console.log('Parameters:', params);
-    
+
     const { rotation_angle, sides, bracket_count } = config;
-    const calculated_height = (Math.sin(toRadians(rotation_angle)) * params.lumber_height) + 
-                            params.wall_thickness * 2;
-    
+    const calculated_height = (Math.sin(toRadians(rotation_angle)) * params.lumber_height) +
+        params.wall_thickness * 2;
+
     console.log('Calculated height:', calculated_height);
-    
-    const center_polygon_radius = (params.lumber_width + params.wall_thickness / 2) / 
-                                (2 * Math.sin(Math.PI/sides));
-    
+
+    const center_polygon_radius = (params.lumber_width + params.wall_thickness / 2) /
+        (2 * Math.sin(Math.PI / sides));
+
     return createConnector(params, {
         number_of_sides: sides,
         center_polygon_radius,
@@ -281,16 +289,16 @@ function main(params) {
     console.log('Starting main with params:', params);
     const parts = [];
     const { dome_type, part, inset_depth } = params;
-    
+
     parts.push(createHub(params, dome_type));
-    
+
     // if (part === "hubs" || part === "all") {
     //     parts.push(createHub(params, dome_type));
     //     if (dome_type === "2v") {
     //         parts.push(translate([inset_depth * 4, 0, 0], createHub(params, dome_type)));
     //     }
     // }
-    
+
     // if (part === "bottoms" || part === "all") {
     //     if (dome_type === "1v") {
     //         parts.push(translate([inset_depth * 4, 0, 0], createHub(params, dome_type)));
@@ -299,7 +307,7 @@ function main(params) {
     //         parts.push(translate([0, inset_depth * 4, 0], createHub(params, dome_type)));
     //     }
     // }
-    
+
     return parts;
 }
 
