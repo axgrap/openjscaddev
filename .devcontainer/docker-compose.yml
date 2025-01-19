@@ -1,15 +1,14 @@
-version: '3.8'
+version: "3.8"
 services:
   jscad:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
     init: true
     volumes:
-       - ../workspace/projects:/workspace/openjscad/packages/web/examples/:cached
-       - ./devserver.js:/workspace/openjscad/packages/web/devserver.js:cached
+      - ../:/workspace/openjscad/packages/web/examples/:cached
+      #  - ./devserver.js:/workspace/openjscad/packages/web/devserver.js:cached
     ports:
       - "3000:3000"
       - "8081:8081"
     user: node
-  

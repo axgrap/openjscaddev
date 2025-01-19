@@ -72,6 +72,11 @@ function processExamples() {
 }
 
 function processExamplesInDirectory(dir, examples) {
+  // Skip hidden directories (starting with .)
+  if (path.basename(dir).startsWith('.')) {
+    console.log(`${getTimestamp()} ⏭️ Skipping hidden directory: ${dir}`)
+    return
+  }
   console.log(`${getTimestamp()} 📂 Processing directory:`, dir)
   const files = fs.readdirSync(dir)
   console.log(`${getTimestamp()} 📑 Found ${files.length} files in directory`)
