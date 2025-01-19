@@ -18,7 +18,6 @@ FROM mcr.microsoft.com/devcontainers/javascript-node:22
 COPY --from=deps-builder /workspace/openjscad /workspace/openjscad
 COPY --from=deps-builder /usr/local/lib/node_modules /usr/local/lib/node_modules
 # COPY --from=deps-builder /usr/local/bin/@jscad /usr/local/bin/@jscad
-COPY devserver.js /workspace/openjscad/packages/web/devserver.js
 # Set working directory
 WORKDIR /workspace/openjscad/packages/web
 
@@ -30,9 +29,12 @@ USER node
 EXPOSE 3000
 EXPOSE 8081
 
+COPY favicon.ico /workspace/openjscad/packages/web/favicon.ico
 USER root
 RUN chown -R node:node /workspace/openjscad
 
-USER node
+
+COPY devserver.js /workspace/openjscad/packages/web/devserver.js
 RUN chmod +x /workspace/openjscad/packages/web/devserver.js
+USER node
 ENTRYPOINT ["node", "/workspace/openjscad/packages/web/devserver.js", "&"]
