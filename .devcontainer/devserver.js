@@ -22,13 +22,21 @@ console.log(`${getTimestamp()} 📁 Base directory:`, baseDir)
 // Update server configuration to serve static files
 const server = budo('/workspace/openjscad/packages/web/demo.js', {
   live: {
-    reload: false  // Disable automatic reload
+    reload: false
   },
   stream: process.stdout,
-  watchGlob: ['examples/**/*.{js,html,css}', 'devserver.js'],
+  watchGlob: ['examples/**/*.{js,html,css}', 'devserver.js', 'demo.css'],
   port: 8081,
   dir: baseDir,
-  serve: 'demo.js'
+  serve: 'demo.js',
+  staticOptions: {
+    // Configure proper MIME types
+    setHeaders: function (res, path) {
+      if (path.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css')
+      }
+    }
+  }
 })
 
 // Handle server events
@@ -55,7 +63,7 @@ server.on('reload', function () {
 function processExamples() {
   console.log(`${getTimestamp()} 🚀 Starting examples processing...`)
   const examples = { 'Working Files': [], Other: [] }
-  const examplesDist = 'examples'
+  const examplesDist = baseDir + '/examples'
   try {
     processExamplesInDirectory(examplesDist, examples)
   } catch (error) {
@@ -73,6 +81,7 @@ function processExamples() {
 
 function processExamplesInDirectory(dir, examples) {
   // Skip hidden directories (starting with .)
+
   if (path.basename(dir).startsWith('.')) {
     console.log(`${getTimestamp()} ⏭️ Skipping hidden directory: ${dir}`)
     return

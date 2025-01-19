@@ -2,7 +2,7 @@
   "name": "JSCAD Development",
   "dockerComposeFile": "docker-compose.yml",
   "service": "jscad",
-  "workspaceFolder": "/workspace/openjscad",
+  "workspaceFolder": "/workspace/openjscad/packages/web/examples/",
   "forwardPorts": [3000, 8081],
   "remoteUser": "node",
   "shutdownAction": "stopCompose",
