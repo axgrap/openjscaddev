@@ -147,7 +147,7 @@ function shouldReload(filePath) {
   // If this is a new file we haven't seen before, return true
   if (!knownFiles.has(filePath)) {
     console.log(`${getTimestamp()} 🆕 New file detected: ${filePath}`)
-    return true;
+    processExamples()
   }
   console.log(`${getTimestamp()} ♻️ Existing file modified: ${filePath}`)
   return false;
