@@ -153,8 +153,6 @@ function generateGeodesicVertices(frequency = 1, radius = R) {
     }
 }
 
-// Generate vertices based on frequency
-const vertices = generateGeodesicVertices(1, R); // Change frequency here
 
 export function getParameterDefinitions() {
     return [
@@ -184,17 +182,15 @@ export function main(params) {
     const vertices = generateGeodesicVertices(frequency, baseRadius);
     console.log('Generated vertices:', vertices.length);
 
-
-
     // Create struts from each vertex to midpoints of nearest neighbors
     const objects = createStruts(vertices, scaledStrutRadius);
 
     // Add spheres at vertices
     for (let i = 0; i < vertices.length; i++) {
+        console.log(`Adding sphere at vertex ${i}:`, vertices[i]);
         const sphere = primitives.sphere({ radius: scaledSphereRadius, center: vertices[i] });
         const coloredSphere = colorize(getNextColor(), sphere);
         objects.push(coloredSphere);
-        console.log(`Added sphere at vertex ${i}:`, vertices[i]);
     }
 
     console.log(`[SimpleDome] Created ${objects.length} objects.`);
@@ -212,30 +208,28 @@ function createStruts(vertices, scaledStrutRadius) {
 
         // Sort by distance and take the closest 3-5 neighbors
         neighbors.sort((a, b) => a.distance - b.distance);
-        const closestNeighbors = neighbors.slice(0, Math.min(5, neighbors.length));
+        const closestNeighbors = neighbors.slice(0, Math.min(6, neighbors.length));
 
         console.log(`Vertex ${i} has ${closestNeighbors.length} neighbors:`, closestNeighbors.map(n => n.index));
 
         // Create struts to midpoints of nearest neighbor pairs
         for (let j = 0; j < closestNeighbors.length; j++) {
-            for (let k = j + 1; k < closestNeighbors.length; k++) {
-                const neighbor1 = closestNeighbors[j].vertex;
-                const neighbor2 = closestNeighbors[k].vertex;
+            // for (let k = j + 1; k < closestNeighbors.length; k++) {
+            const neighbor1 = closestNeighbors[j].vertex;
 
-                // Calculate midpoint between the two neighbors
-                // Calculate midpoint between this vertex and the neighbor
-                const midX = (neighbor1[0] + neighbor2[0]) / 2;
-                const midY = (neighbor1[1] + neighbor2[1]) / 2;
-                const midZ = (neighbor1[2] + neighbor2[2]) / 2;
-                const midpoint = [midX, midY, midZ];
+            // Calculate midpoint between the two neighbors
+            // Calculate midpoint between this vertex and the neighbor
+            const midX = (neighbor1[0] + vertex[0]) / 2;
+            const midY = (neighbor1[1] + vertex[1]) / 2;
+            const midZ = (neighbor1[2] + vertex[2]) / 2;
+            const midpoint = [midX, midY, midZ];
 
-                // Create strut from current vertex to midpoint
-                const strut = cylinderFromTo(vertex, midpoint, scaledStrutRadius, 16);
-                const coloredStrut = colorize(getNextColor(), strut);
-                objects.push(coloredStrut);
+            // Create strut from current vertex to midpoint
+            const strut = cylinderFromTo(vertex, midpoint, scaledStrutRadius, 16);
+            const coloredStrut = colorize(getNextColor(), strut);
+            objects.push(coloredStrut);
 
-                console.log(`Created strut from vertex ${i} to midpoint of neighbors ${closestNeighbors[j].index} and ${closestNeighbors[k].index}`);
-            }
+            console.log(`Created strut from vertex ${i} to midpoint of vertex and ${closestNeighbors[j].index}`);
         }
     }
     return objects;
