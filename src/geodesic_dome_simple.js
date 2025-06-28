@@ -97,7 +97,19 @@ const R = 100;
 // Normalize so all vertices are on the sphere of given radius
 function normalize([x, y, z], radius) {
     const len = Math.sqrt(x * x + y * y + z * z);
+    if (len < 1e-8) {
+        // Avoid division by zero, return origin (or skip in caller)
+        return [0, 0, 0];
+    }
     return [x * radius / len, y * radius / len, z * radius / len];
+}
+
+function isDuplicateVertex(vertices, v, epsilon = 1e-6) {
+    return vertices.some(([x, y, z]) =>
+        Math.abs(x - v[0]) < epsilon &&
+        Math.abs(y - v[1]) < epsilon &&
+        Math.abs(z - v[2]) < epsilon
+    );
 }
 
 // Generate geodesic dome vertices for different frequencies
@@ -109,108 +121,130 @@ function generateGeodesicVertices(frequency = 1, radius = R) {
         [1, PHI, 0], [-1, PHI, 0], [1, -PHI, 0], [-1, -PHI, 0],
         [PHI, 0, 1], [-PHI, 0, 1], [PHI, 0, -1], [-PHI, 0, -1]
     ];
-    // Define icosahedron edges (pairs of vertex indices that form edges)
-    const edges = [
-        [0, 1], [0, 4], [0, 8], [0, 9], [0, 10],  // Vertex 0 edges
-        [1, 4], [1, 6], [1, 8], [1, 9], [1, 11],  // Vertex 1 edges
-        [2, 3], [2, 5], [2, 7], [2, 10], [2, 11], // Vertex 2 edges
-        [3, 5], [3, 6], [3, 7], [3, 10], [3, 11], // Vertex 3 edges
-        [4, 6], [4, 8], [4, 10],                    // Vertex 4 edges
-        [5, 7], [5, 9], [5, 11],                    // Vertex 5 edges
-        [6, 7], [6, 8], [6, 11],                    // Vertex 6 edges
-        [7, 9], [7, 10], [7, 11],                   // Vertex 7 edges
-        [8, 9], [8, 10],                            // Vertex 8 edges
-        [9, 10], [9, 11],                           // Vertex 9 edges
-        [10, 11]                                    // Vertex 10 edges
-    ];
-    if (frequency === 1) {
-        // Frequency 1: All icosahedron vertices
-        return rawVertices.map(v => normalize(v, radius));
-
-    } else if (frequency === 2) {
-        const vertices = [];
-
-        // Add all original vertices
-        rawVertices.forEach(v => {
-            vertices.push(normalize(v, radius));
-        });
-
-        // Add edge midpoints for frequency 2
-        edges.forEach(([i, j]) => {
-            const v1 = rawVertices[i];
-            const v2 = rawVertices[j];
-
-            const midX = (v1[0] + v2[0]) / 2;
-            const midY = (v1[1] + v2[1]) / 2;
-            const midZ = (v1[2] + v2[2]) / 2;
-
-            const midpoint = normalize([midX, midY, midZ], radius);
-            vertices.push(midpoint);
-        });
-
-        return vertices;
-
-    } else if (frequency === 3) {
-        // Frequency 3: Further subdivision
-
-        const vertices = [];
-
-        // Add all original vertices
-        rawVertices.forEach(v => {
-            vertices.push(normalize(v, radius));
-        });
-        // Add edge midpoints (frequency 2)
-        const edgeMidpoints = [];
-        edges.forEach(([i, j]) => {
-            const v1 = rawVertices[i];
-            const v2 = rawVertices[j];
-
-            const midX = (v1[0] + v2[0]) / 2;
-            const midY = (v1[1] + v2[1]) / 2;
-            const midZ = (v1[2] + v2[2]) / 2;
-
-            const midpoint = normalize([midX, midY, midZ], radius);
-            edgeMidpoints.push(midpoint);
-            vertices.push(midpoint);
-        });
-
-        // Add face centers for frequency 3 (simplified approach)
-        // For a proper frequency 3, you'd need to subdivide each triangular face
-        // This is a simplified version that adds some additional subdivision points
-
-        // Add some additional subdivision points by interpolating between vertices
-        for (let i = 0; i < rawVertices.length; i++) {
-            const v1 = rawVertices[i];
-            for (let j = i + 1; j < rawVertices.length; j++) {
-                const v2 = rawVertices[j];
-                // Add 1/3 and 2/3 points along edges
-                for (let t = 1; t <= 2; t++) {
-                    const ratio = t / 3;
-                    const x = v1[0] + ratio * (v2[0] - v1[0]);
-                    const y = v1[1] + ratio * (v2[1] - v1[1]);
-                    const z = v1[2] + ratio * (v2[2] - v1[2]);
-
-                    const subPoint = normalize([x, y, z], radius);
-                    vertices.push(subPoint);
-                }
-            }
+    let vertices = [];
+    // Add all original vertices
+    rawVertices.forEach(v => {
+        const nv = normalize(v, radius);
+        if (!isDuplicateVertex(vertices, nv)) {
+            vertices.push(nv);
         }
-
-        return vertices;
-
-    } else {
-        console.warn(`[SimpleDome] Frequency ${frequency} not implemented, using frequency 1`);
-        return generateGeodesicVertices(1, radius);
+    });
+    for (let pass = 1; pass <= frequency; pass++) {
+        calculateEdgesFromVertices(vertices).forEach(([i, j]) => {
+            const v1 = vertices[i];
+            const v2 = vertices[j];
+            vertices = [...new Set([...vertices, ...subDivideOnEdge(v1, v2, radius, pass)])];
+        });
     }
+    console.log("Calculated vertices: ", vertices)
+    return vertices;
+
+    // if (frequency === 1) {
+    //     // Frequency 1: All icosahedron vertices
+    //     return rawVertices.map(v => normalize(v, radius));
+
+    // } else if (frequency === 2) {
+    //     const vertices = [];
+    //     // Add all original vertices
+    //     rawVertices.forEach(v => {
+    //         const nv = normalize(v, radius);
+    //         if (!isDuplicateVertex(vertices, nv)) {
+    //             vertices.push(nv);
+    //         }
+    //     });
+    //     // Add edge midpoints for frequency 2
+    //     calculateEdgesFromVertices(rawVertices).forEach(([i, j]) => {
+    //         const v1 = rawVertices[i];
+    //         const v2 = rawVertices[j];
+    //         const midX = (v1[0] + v2[0]) / 2;
+    //         const midY = (v1[1] + v2[1]) / 2;
+    //         const midZ = (v1[2] + v2[2]) / 2;
+    //         const midpoint = normalize([midX, midY, midZ], radius);
+    //         if (!isDuplicateVertex(vertices, midpoint)) {
+    //             vertices.push(midpoint);
+    //         }
+    //     });
+    //     return vertices;
+
+    // } else if (frequency === 3) {
+    //     let vertices = [];
+    //     // Add all original vertices
+    //     rawVertices.forEach(v => {
+    //         const nv = normalize(v, radius);
+    //         if (!isDuplicateVertex(vertices, nv)) {
+    //             vertices.push(nv);
+    //         }
+    //     });
+    //     for (let pass = 1; pass <= frequency; pass++) {
+    //         calculateEdgesFromVertices(vertices).forEach(([i, j]) => {
+    //             const v1 = vertices[i];
+    //             const v2 = vertices[j];
+    //             vertices = [...new Set([...vertices, ...subDivideOnEdge(v1, v2, radius, pass)])];
+    //         });
+    //     }
+    //     console.log("Calculated vertices: ", vertices)
+    //     return vertices;
+
+    // } else {
+    //     console.warn(`[SimpleDome] Frequency ${frequency} not implemented, using frequency 1`);
+    //     return generateGeodesicVertices(1, radius);
+    // }
 }
 
+function subDivideOnEdge(v1, v2, radius, frequency) {
+    const points = frequency - 1
+    const additionalVertices = []
+    for (let t = 1; t <= points; t++) {
+        const ratio = t / frequency;
+        const x = v1[0] + ratio * (v2[0] - v1[0]);
+        const y = v1[1] + ratio * (v2[1] - v1[1]);
+        const z = v1[2] + ratio * (v2[2] - v1[2]);
+        const subPoint = normalize([x, y, z], radius);
+        if (!isDuplicateVertex(additionalVertices, subPoint)) {
+            console.log("Adding sub-point", subPoint)
+            additionalVertices.push(subPoint);
+        }
+    }
+    return additionalVertices
+}
+
+function calculateEdgesFromVertices(vertices, epsilon = 1e-5) {
+    // Find all unique pairs and their distances
+    const edges = [];
+    let minDist = Infinity;
+    // First, find the minimum nonzero distance (strut length)
+    for (let i = 0; i < vertices.length; i++) {
+        for (let j = i + 1; j < vertices.length; j++) {
+            const dx = vertices[i][0] - vertices[j][0];
+            const dy = vertices[i][1] - vertices[j][1];
+            const dz = vertices[i][2] - vertices[j][2];
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (dist > epsilon && dist < minDist) {
+                minDist = dist;
+            }
+        }
+    }
+    // Now, collect all pairs within a small tolerance of minDist
+    for (let i = 0; i < vertices.length; i++) {
+        for (let j = i + 1; j < vertices.length; j++) {
+            const dx = vertices[i][0] - vertices[j][0];
+            const dy = vertices[i][1] - vertices[j][1];
+            const dz = vertices[i][2] - vertices[j][2];
+            const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (Math.abs(dist - minDist) < epsilon * 10) {
+                edges.push([i, j]);
+            }
+        }
+    }
+    return edges;
+}
 
 export function getParameterDefinitions() {
     return [
-        { name: 'frequency', type: 'number', initial: 1, min: 1, max: 3, step: 1, caption: 'Frequency' },
+        { name: 'frequency', type: 'number', initial: 3, min: 1, max: 3, step: 1, caption: 'Frequency' },
         { name: 'strutRadius', type: 'number', initial: 3, min: 1, max: 100, step: 0.01, caption: 'Strut Radius' },
         { name: 'sphereRadius', type: 'number', initial: 5, min: 1, max: 100, step: 0.01, caption: 'Sphere Radius' },
-        { name: 'domeSize', type: 'number', initial: 40, min: 1, max: 300, step: 0.1, caption: 'Dome Size' }
+        { name: 'domeSize', type: 'number', initial: 100, min: 1, max: 300, step: 0.1, caption: 'Dome Size' }
     ];
 }
 
