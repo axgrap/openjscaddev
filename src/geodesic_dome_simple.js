@@ -94,60 +94,111 @@ function cylinderFromTo(p1, p2, radius, segments) {
 const PHI = (1 + Math.sqrt(5)) / 2;
 const R = 100;
 
-// Normalize so all vertices are on the sphere of radius R
-function normalize([x, y, z]) {
+// Normalize so all vertices are on the sphere of given radius
+function normalize([x, y, z], radius) {
     const len = Math.sqrt(x * x + y * y + z * z);
-    return [x * R / len, y * R / len, z * R / len];
+    return [x * radius / len, y * radius / len, z * radius / len];
 }
 
 // Generate geodesic dome vertices for different frequencies
 function generateGeodesicVertices(frequency = 1, radius = R) {
     console.log(`[SimpleDome] Generating frequency ${frequency} dome with radius ${radius}`);
 
+    const rawVertices = [
+        [0, 1, PHI], [0, -1, PHI], [0, 1, -PHI], [0, -1, -PHI],
+        [1, PHI, 0], [-1, PHI, 0], [1, -PHI, 0], [-1, -PHI, 0],
+        [PHI, 0, 1], [-PHI, 0, 1], [PHI, 0, -1], [-PHI, 0, -1]
+    ];
+    // Define icosahedron edges (pairs of vertex indices that form edges)
+    const edges = [
+        [0, 1], [0, 4], [0, 8], [0, 9], [0, 10],  // Vertex 0 edges
+        [1, 4], [1, 6], [1, 8], [1, 9], [1, 11],  // Vertex 1 edges
+        [2, 3], [2, 5], [2, 7], [2, 10], [2, 11], // Vertex 2 edges
+        [3, 5], [3, 6], [3, 7], [3, 10], [3, 11], // Vertex 3 edges
+        [4, 6], [4, 8], [4, 10],                    // Vertex 4 edges
+        [5, 7], [5, 9], [5, 11],                    // Vertex 5 edges
+        [6, 7], [6, 8], [6, 11],                    // Vertex 6 edges
+        [7, 9], [7, 10], [7, 11],                   // Vertex 7 edges
+        [8, 9], [8, 10],                            // Vertex 8 edges
+        [9, 10], [9, 11],                           // Vertex 9 edges
+        [10, 11]                                    // Vertex 10 edges
+    ];
     if (frequency === 1) {
-        // Frequency 1: Icosahedron vertices
-        const rawVertices = [
-            [0, 1, PHI], [0, -1, PHI], [0, 1, -PHI], [0, -1, -PHI],
-            [1, PHI, 0], [-1, PHI, 0], [1, -PHI, 0], [-1, -PHI, 0],
-            [PHI, 0, 1], [-PHI, 0, 1], [PHI, 0, -1], [-PHI, 0, -1]
-        ];
-        return rawVertices.map(normalize);
+        // Frequency 1: All icosahedron vertices
+        return rawVertices.map(v => normalize(v, radius));
+
     } else if (frequency === 2) {
-        // Frequency 2: Subdivide icosahedron faces
-        // This is a simplified version - for full frequency 2 you'd need more complex subdivision
-        const baseVertices = [
-            [0, 1, PHI], [0, -1, PHI], [0, 1, -PHI], [0, -1, -PHI],
-            [1, PHI, 0], [-1, PHI, 0], [1, -PHI, 0], [-1, -PHI, 0],
-            [PHI, 0, 1], [-PHI, 0, 1], [PHI, 0, -1], [-PHI, 0, -1]
-        ];
+        const vertices = [];
 
-        // Add midpoints of edges for frequency 2
-        const vertices = [...baseVertices.map(normalize)];
+        // Add all original vertices
+        rawVertices.forEach(v => {
+            vertices.push(normalize(v, radius));
+        });
 
-        // Add some edge midpoints (simplified)
-        for (let i = 0; i < baseVertices.length; i++) {
-            for (let j = i + 1; j < baseVertices.length; j++) {
-                const v1 = baseVertices[i];
-                const v2 = baseVertices[j];
-                const dx = v2[0] - v1[0];
-                const dy = v2[1] - v1[1];
-                const dz = v2[2] - v1[2];
-                const distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        // Add edge midpoints for frequency 2
+        edges.forEach(([i, j]) => {
+            const v1 = rawVertices[i];
+            const v2 = rawVertices[j];
 
-                // Only add midpoints for edges that are part of the icosahedron
-                if (distance < radius * 1.2) {
-                    const midX = (v1[0] + v2[0]) / 2;
-                    const midY = (v1[1] + v2[1]) / 2;
-                    const midZ = (v1[2] + v2[2]) / 2;
-                    const midpoint = normalize([midX, midY, midZ]);
-                    vertices.push(midpoint);
+            const midX = (v1[0] + v2[0]) / 2;
+            const midY = (v1[1] + v2[1]) / 2;
+            const midZ = (v1[2] + v2[2]) / 2;
+
+            const midpoint = normalize([midX, midY, midZ], radius);
+            vertices.push(midpoint);
+        });
+
+        return vertices;
+
+    } else if (frequency === 3) {
+        // Frequency 3: Further subdivision
+
+        const vertices = [];
+
+        // Add all original vertices
+        rawVertices.forEach(v => {
+            vertices.push(normalize(v, radius));
+        });
+        // Add edge midpoints (frequency 2)
+        const edgeMidpoints = [];
+        edges.forEach(([i, j]) => {
+            const v1 = rawVertices[i];
+            const v2 = rawVertices[j];
+
+            const midX = (v1[0] + v2[0]) / 2;
+            const midY = (v1[1] + v2[1]) / 2;
+            const midZ = (v1[2] + v2[2]) / 2;
+
+            const midpoint = normalize([midX, midY, midZ], radius);
+            edgeMidpoints.push(midpoint);
+            vertices.push(midpoint);
+        });
+
+        // Add face centers for frequency 3 (simplified approach)
+        // For a proper frequency 3, you'd need to subdivide each triangular face
+        // This is a simplified version that adds some additional subdivision points
+
+        // Add some additional subdivision points by interpolating between vertices
+        for (let i = 0; i < rawVertices.length; i++) {
+            const v1 = rawVertices[i];
+            for (let j = i + 1; j < rawVertices.length; j++) {
+                const v2 = rawVertices[j];
+                // Add 1/3 and 2/3 points along edges
+                for (let t = 1; t <= 2; t++) {
+                    const ratio = t / 3;
+                    const x = v1[0] + ratio * (v2[0] - v1[0]);
+                    const y = v1[1] + ratio * (v2[1] - v1[1]);
+                    const z = v1[2] + ratio * (v2[2] - v1[2]);
+
+                    const subPoint = normalize([x, y, z], radius);
+                    vertices.push(subPoint);
                 }
             }
         }
 
         return vertices;
+
     } else {
-        // For higher frequencies, you'd implement more complex subdivision
         console.warn(`[SimpleDome] Frequency ${frequency} not implemented, using frequency 1`);
         return generateGeodesicVertices(1, radius);
     }
@@ -159,7 +210,7 @@ export function getParameterDefinitions() {
         { name: 'frequency', type: 'number', initial: 1, min: 1, max: 3, step: 1, caption: 'Frequency' },
         { name: 'strutRadius', type: 'number', initial: 3, min: 1, max: 100, step: 0.01, caption: 'Strut Radius' },
         { name: 'sphereRadius', type: 'number', initial: 5, min: 1, max: 100, step: 0.01, caption: 'Sphere Radius' },
-        { name: 'domeSize', type: 'number', initial: 10, min: 1, max: 300, step: 0.1, caption: 'Dome Size' }
+        { name: 'domeSize', type: 'number', initial: 40, min: 1, max: 300, step: 0.1, caption: 'Dome Size' }
     ];
 }
 
@@ -183,7 +234,7 @@ export function main(params) {
     console.log('Generated vertices:', vertices.length);
 
     // Create struts from each vertex to midpoints of nearest neighbors
-    const objects = createStruts(vertices, scaledStrutRadius);
+    const objects = createStruts(vertices, scaledStrutRadius, baseRadius);
 
     // Add spheres at vertices
     for (let i = 0; i < vertices.length; i++) {
@@ -197,14 +248,14 @@ export function main(params) {
     return objects;
 }
 
-function createStruts(vertices, scaledStrutRadius) {
+function createStruts(vertices, scaledStrutRadius, baseRadius) {
     const objects = [];
     for (let i = 0; i < vertices.length; i++) {
         const vertex = vertices[i];
         console.log(`Processing vertex ${i}:`, vertex);
 
         // Find nearest neighbors (vertices within a certain distance)
-        const neighbors = getNeighbors(vertices, vertex);
+        const neighbors = getNeighbors(vertices, vertex, baseRadius);
 
         // Sort by distance and take the closest 3-5 neighbors
         neighbors.sort((a, b) => a.distance - b.distance);
@@ -234,15 +285,15 @@ function createStruts(vertices, scaledStrutRadius) {
     }
     return objects;
 }
-function getNeighbors(vertices, vertex) {
+function getNeighbors(vertices, vertex, radius) {
     const neighbors = [];
     for (let j = 0; j < vertices.length; j++) {
         if (vertices[j] === vertex) {
             continue;
         }
         const distance = vec3.distance(vertex, vertices[j]);
-        // Consider neighbors within 1.5 * base radius
-        if (distance < 1.5 * R) {
+        // Consider neighbors within 1.5 * radius
+        if (distance < 1.5 * radius) {
             neighbors.push({ index: j, distance, vertex: vertices[j] });
         }
     }
