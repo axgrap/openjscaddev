@@ -1,7 +1,5 @@
-// geodesic_dome_simple.js
-// Minimal geodesic dome example for OpenJSCAD or browser viewer
-// No user input, just renders a basic frequency-1 dome (icosahedron cap)
-
+//TODO make an object to hold the vertices and struts so they can have additional properties (like color, label, etc)
+//TODO make a function to determine the neighbors of a vertex that are required to be connected to create the outer shell.
 const { primitives, transforms, maths, colors } = jscadModeling;
 const { cylinder, sphere } = primitives;
 const { translate, rotate } = transforms;
@@ -186,24 +184,31 @@ export function main(params) {
     const vertices = generateGeodesicVertices(frequency, baseRadius);
     console.log('Generated vertices:', vertices.length);
 
-    const objects = [];
+
 
     // Create struts from each vertex to midpoints of nearest neighbors
+    const objects = createStruts(vertices, scaledStrutRadius);
+
+    // Add spheres at vertices
+    for (let i = 0; i < vertices.length; i++) {
+        const sphere = primitives.sphere({ radius: scaledSphereRadius, center: vertices[i] });
+        const coloredSphere = colorize(getNextColor(), sphere);
+        objects.push(coloredSphere);
+        console.log(`Added sphere at vertex ${i}:`, vertices[i]);
+    }
+
+    console.log(`[SimpleDome] Created ${objects.length} objects.`);
+    return objects;
+}
+
+function createStruts(vertices, scaledStrutRadius) {
+    const objects = [];
     for (let i = 0; i < vertices.length; i++) {
         const vertex = vertices[i];
         console.log(`Processing vertex ${i}:`, vertex);
 
         // Find nearest neighbors (vertices within a certain distance)
-        const neighbors = [];
-        for (let j = 0; j < vertices.length; j++) {
-            if (i !== j) {
-                const distance = vec3.distance(vertex, vertices[j]);
-                // Consider neighbors within 1.5 * base radius
-                if (true) {
-                    neighbors.push({ index: j, distance, vertex: vertices[j] });
-                }
-            }
-        }
+        const neighbors = getNeighbors(vertices, vertex);
 
         // Sort by distance and take the closest 3-5 neighbors
         neighbors.sort((a, b) => a.distance - b.distance);
@@ -233,15 +238,21 @@ export function main(params) {
             }
         }
     }
-
-    // Add spheres at vertices
-    for (let i = 0; i < vertices.length; i++) {
-        const sphere = primitives.sphere({ radius: scaledSphereRadius, center: vertices[i] });
-        const coloredSphere = colorize(getNextColor(), sphere);
-        objects.push(coloredSphere);
-        console.log(`Added sphere at vertex ${i}:`, vertices[i]);
-    }
-
-    console.log(`[SimpleDome] Created ${objects.length} objects.`);
     return objects;
-} 
+}
+function getNeighbors(vertices, vertex) {
+    const neighbors = [];
+    for (let j = 0; j < vertices.length; j++) {
+        if (vertices[j] === vertex) {
+            continue;
+        }
+        const distance = vec3.distance(vertex, vertices[j]);
+        // Consider neighbors within 1.5 * base radius
+        if (distance < 1.5 * R) {
+            neighbors.push({ index: j, distance, vertex: vertices[j] });
+        }
+    }
+    console.log(`Vertex ${vertex} has ${neighbors.length} neighbors:`, neighbors.map(n => n.distance));
+    return neighbors;
+}
+
