@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Demo Application</title>
+    <style>
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+      }
+      #jscad {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        margin: 0;
+        outline: 1px solid black;
+        z-index: 1;
+      }
+      #paramPanel {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        background: rgba(255, 255, 255, 0.97);
+        border-radius: 8px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+        padding: 16px 16px 8px 16px;
+        z-index: 10;
+        min-width: 220px;
+        max-width: 320px;
+        transition: box-shadow 0.2s;
+      }
+      #paramPanel.collapsed {
+        padding: 0;
+        min-width: 0;
+        max-width: none;
+        background: transparent;
+        box-shadow: none;
+      }
+      #paramPanel #paramForm {
+        display: block;
+      }
+      #paramPanel.collapsed #paramForm {
+        display: none;
+      }
+      #togglePanelBtn {
+        display: block;
+        background: #333;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 1em;
+        cursor: pointer;
+        margin-bottom: 8px;
+        margin-top: 4px;
+        margin-left: 4px;
+        z-index: 11;
+        transition: background 0.2s;
+      }
+      #togglePanelBtn:hover {
+        background: #555;
+      }
+      #debugPanel {
+        position: absolute;
+        left: 20px;
+        right: 20px;
+        bottom: 20px;
+        background: rgba(30, 30, 30, 0.97);
+        color: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+        padding: 0 0 8px 0;
+        z-index: 20;
+        min-width: 220px;
+        max-width: calc(100vw - 40px);
+        max-height: 40vh;
+        overflow: hidden;
+        transition: box-shadow 0.2s, max-height 0.2s;
+      }
+      #debugPanel.collapsed {
+        max-height: 32px;
+        padding-bottom: 0;
+        background: rgba(30, 30, 30, 0.7);
+      }
+      #toggleDebugBtn {
+        display: block;
+        background: #222;
+        color: #fff;
+        border: none;
+        border-radius: 6px 6px 0 0;
+        padding: 6px 12px;
+        font-size: 1em;
+        cursor: pointer;
+        width: 100%;
+        text-align: left;
+        z-index: 21;
+        transition: background 0.2s;
+      }
+      #toggleDebugBtn:hover {
+        background: #444;
+      }
+      #debugLog {
+        font-family: monospace;
+        font-size: 0.95em;
+        padding: 8px 16px 8px 16px;
+        overflow-y: auto;
+        max-height: 30vh;
+        white-space: pre-wrap;
+        word-break: break-word;
+        background: transparent;
+      }
+      #debugPanel.collapsed #debugLog {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <script
+      language="javascript"
+      src="https://unpkg.com/@jscad/modeling"
+      id="MODELING"
+    ></script>
+    <script
+      language="javascript"
+      src="https://unpkg.com/@jscad/regl-renderer"
+      id="RENDERING"
+    ></script>
+    <div id="paramPanel" class="collapsed">
+      <label for="fileSelect" style="font-weight: bold">Select Model:</label>
+      <select id="fileSelect" style="margin-bottom: 1em; width: 100%">
+        <option value="geodesic_dome_simple.js">Simple Dome</option>
+        <option value="geodesic_hub_v2.js">Geodesic Hub</option>
+        <option value="geodesic_dome.js">Geodesic Dome</option>
+      </select>
+      <button id="togglePanelBtn" type="button">Parameters &#9660;</button>
+      <form id="paramForm"></form>
+    </div>
+    <div id="jscad"></div>
+    <div id="debugPanel" class="collapsed">
+      <button id="toggleDebugBtn" type="button">Debug Log &#9650;</button>
+      <div id="debugLog"></div>
+    </div>
+
+    <script type="module">
+      // Model file management
+      const availableFiles = [
+        { label: "Geodesic Hub", value: "geodesic_hub_v2.js" },
+        { label: "Geodesic Dome", value: "geodesic_dome.js" },
+        { label: "Simple Dome", value: "geodesic_dome_simple.js" },
+      ];
+      let currentModule = null;
+      let main = null;
+      let getParameterDefinitions = null;
+      let paramDefs = [];
+      const fileSelect = document.getElementById("fileSelect");
+      const paramForm = document.getElementById("paramForm");
+      // Helper to create form fields from parameter definitions
+      function createForm(params, onChange) {
+        const form = document.getElementById("paramForm");
+        form.innerHTML = "";
+        params.forEach((param) => {
+          const wrapper = document.createElement("div");
+          wrapper.style.marginBottom = "0.5em";
+          const label = document.createElement("label");
+          label.textContent = param.caption + ": ";
+          label.htmlFor = param.name;
+          wrapper.appendChild(label);
+          let input;
+          if (param.type === "choice") {
+            input = document.createElement("select");
+            input.name = param.name;
+            input.id = param.name;
+            param.values.forEach((val) => {
+              const opt = document.createElement("option");
+              opt.value = val;
+              opt.textContent = val;
+              if (val === param.initial) opt.selected = true;
+              input.appendChild(opt);
+            });
+          } else if (
+            param.type === "float" ||
+            param.type === "int" ||
+            param.type === "number"
+          ) {
+            input = document.createElement("input");
+            input.type = "number";
+            input.step = "any";
+            input.value = param.initial;
+            input.name = param.name;
+            input.id = param.name;
+          } else if (param.type === "checkbox") {
+            input = document.createElement("input");
+            input.type = "checkbox";
+            input.name = param.name;
+            input.id = param.name;
+            input.checked = !!param.checked;
+          } else {
+            input = document.createElement("input");
+            input.type = "text";
+            input.value = param.initial;
+            input.name = param.name;
+            input.id = param.name;
+          }
+          input.addEventListener("change", onChange);
+          wrapper.appendChild(input);
+          form.appendChild(wrapper);
+        });
+      }
+      // Get parameter definitions
+      function getParamsFromForm() {
+        const form = document.getElementById("paramForm");
+        const params = {};
+        if (!paramDefs) return params;
+        paramDefs.forEach((def) => {
+          const el = form.elements[def.name];
+          if (def.type === "checkbox") {
+            params[def.name] = el.checked;
+          } else if (
+            def.type === "float" ||
+            def.type === "int" ||
+            def.type === "number"
+          ) {
+            params[def.name] = parseFloat(el.value);
+          } else {
+            params[def.name] = el.value;
+          }
+        });
+        return params;
+      }
+      // Rendering logic
+      let renderer,
+        renderOptions,
+        state,
+        perspectiveCamera,
+        orbitControls,
+        containerElement,
+        gridOptions,
+        axisOptions;
+      let updateView = true;
+
+      function setupRenderer() {
+        const {
+          prepareRender,
+          drawCommands,
+          cameras,
+          controls,
+          entitiesFromSolids,
+        } = jscadReglRenderer;
+        perspectiveCamera = cameras.perspective;
+        orbitControls = controls.orbit;
+        containerElement = document.getElementById("jscad");
+        const width = containerElement.clientWidth;
+        const height = containerElement.clientHeight;
+        state = {};
+        state.camera = Object.assign({}, perspectiveCamera.defaults);
+        perspectiveCamera.setProjection(state.camera, state.camera, {
+          width,
+          height,
+        });
+        perspectiveCamera.update(state.camera, state.camera);
+        state.controls = orbitControls.defaults;
+        const setupOptions = {
+          glOptions: { container: containerElement },
+        };
+        renderer = prepareRender(setupOptions);
+        gridOptions = {
+          visuals: {
+            drawCmd: "drawGrid",
+            show: true,
+          },
+          size: [500, 500],
+          ticks: [25, 5],
+        };
+        axisOptions = {
+          visuals: {
+            drawCmd: "drawAxis",
+            show: true,
+          },
+          size: 300,
+        };
+      }
+      function renderModel() {
+        const { entitiesFromSolids, drawCommands } = jscadReglRenderer;
+        let solids = [];
+        let params = {};
+        if (getParameterDefinitions) {
+          params = getParamsFromForm();
+          solids = main(params);
+        } else if (main) {
+          solids = main();
+        }
+        const entities = entitiesFromSolids({}, solids);
+        renderOptions = {
+          camera: state.camera,
+          drawCommands: {
+            drawAxis: drawCommands.drawAxis,
+            drawGrid: drawCommands.drawGrid,
+            drawLines: drawCommands.drawLines,
+            drawMesh: drawCommands.drawMesh,
+          },
+          entities: [gridOptions, axisOptions, ...entities],
+        };
+        updateView = true;
+      }
+      // UI and event setup
+      async function loadModule(filename) {
+        // Clear debug log panel
+        const debugLog = document.getElementById("debugLog");
+        if (debugLog) debugLog.innerHTML = "";
+        // Dynamic import
+        const mod = await import(`./${filename}`);
+        main = mod.main;
+        getParameterDefinitions = mod.getParameterDefinitions || null;
+        paramDefs = getParameterDefinitions ? getParameterDefinitions() : null;
+        if (paramDefs && paramDefs.length > 0) {
+          document.getElementById("paramForm").style.display = "";
+          createForm(paramDefs, () => {
+            renderModel();
+          });
+        } else {
+          document.getElementById("paramForm").style.display = "none";
+        }
+        renderModel();
+        // Start animation loop only after first renderModel
+        window.requestAnimationFrame(updateAndRender);
+      }
+      fileSelect.addEventListener("change", (e) => {
+        loadModule(e.target.value);
+      });
+      // Initial load
+      setupRenderer();
+      loadModule(fileSelect.value);
+      // Animation and controls
+      let lastX = 0;
+      let lastY = 0;
+      const rotateSpeed = 0.002;
+      const panSpeed = 1;
+      const zoomSpeed = 0.08;
+      let rotateDelta = [0, 0];
+      let panDelta = [0, 0];
+      let zoomDelta = 0;
+      let pointerDown = false;
+      function doRotatePanZoom() {
+        if (rotateDelta[0] || rotateDelta[1]) {
+          const updated = orbitControls.rotate(
+            {
+              controls: state.controls,
+              camera: state.camera,
+              speed: rotateSpeed,
+            },
+            rotateDelta
+          );
+          state.controls = { ...state.controls, ...updated.controls };
+          updateView = true;
+          rotateDelta = [0, 0];
+        }
+        if (panDelta[0] || panDelta[1]) {
+          const updated = orbitControls.pan(
+            { controls: state.controls, camera: state.camera, speed: panSpeed },
+            panDelta
+          );
+          state.controls = { ...state.controls, ...updated.controls };
+          panDelta = [0, 0];
+          state.camera.position = updated.camera.position;
+          state.camera.target = updated.camera.target;
+          updateView = true;
+        }
+        if (zoomDelta) {
+          const updated = orbitControls.zoom(
+            {
+              controls: state.controls,
+              camera: state.camera,
+              speed: zoomSpeed,
+            },
+            zoomDelta
+          );
+          state.controls = { ...state.controls, ...updated.controls };
+          zoomDelta = 0;
+          updateView = true;
+        }
+      }
+      function updateAndRender(timestamp) {
+        if (!renderOptions) return;
+        doRotatePanZoom();
+        if (updateView) {
+          const updates = orbitControls.update({
+            controls: state.controls,
+            camera: state.camera,
+          });
+          state.controls = { ...state.controls, ...updates.controls };
+          updateView = state.controls.changed;
+          state.camera.position = updates.camera.position;
+          perspectiveCamera.update(state.camera);
+          renderer(renderOptions);
+        }
+        window.requestAnimationFrame(updateAndRender);
+      }
+      const moveHandler = (ev) => {
+        if (!pointerDown) return;
+        const dx = lastX - ev.pageX;
+        const dy = ev.pageY - lastY;
+        const shiftKey =
+          ev.shiftKey === true || (ev.touches && ev.touches.length > 2);
+        if (shiftKey) {
+          panDelta[0] += dx;
+          panDelta[1] += dy;
+        } else {
+          rotateDelta[0] -= dx;
+          rotateDelta[1] -= dy;
+        }
+        lastX = ev.pageX;
+        lastY = ev.pageY;
+        ev.preventDefault();
+      };
+      const downHandler = (ev) => {
+        pointerDown = true;
+        lastX = ev.pageX;
+        lastY = ev.pageY;
+        containerElement.setPointerCapture(ev.pointerId);
+      };
+      const upHandler = (ev) => {
+        pointerDown = false;
+        containerElement.releasePointerCapture(ev.pointerId);
+      };
+      const wheelHandler = (ev) => {
+        zoomDelta += ev.deltaY;
+        ev.preventDefault();
+      };
+      containerElement.onpointermove = moveHandler;
+      containerElement.onpointerdown = downHandler;
+      containerElement.onpointerup = upHandler;
+      containerElement.onwheel = wheelHandler;
+      // Collapsible panel logic
+      const panel = document.getElementById("paramPanel");
+      const toggleBtn = document.getElementById("togglePanelBtn");
+      let collapsed = true;
+      toggleBtn.addEventListener("click", () => {
+        collapsed = !collapsed;
+        if (collapsed) {
+          panel.classList.add("collapsed");
+          toggleBtn.innerHTML = "Parameters &#9654;";
+        } else {
+          panel.classList.remove("collapsed");
+          toggleBtn.innerHTML = "Parameters &#9660;";
+        }
+      });
+      // Debug log panel logic
+      const debugPanel = document.getElementById("debugPanel");
+      const debugLog = document.getElementById("debugLog");
+      const toggleDebugBtn = document.getElementById("toggleDebugBtn");
+      let debugCollapsed = true;
+      toggleDebugBtn.addEventListener("click", () => {
+        debugCollapsed = !debugCollapsed;
+        if (debugCollapsed) {
+          debugPanel.classList.add("collapsed");
+          toggleDebugBtn.innerHTML = "Debug Log &#9650;";
+        } else {
+          debugPanel.classList.remove("collapsed");
+          toggleDebugBtn.innerHTML = "Debug Log &#9660;";
+        }
+      });
+      // Patch console.log to also write to the debug log
+      (function () {
+        const origLog = console.log;
+        console.log = function (...args) {
+          origLog.apply(console, args);
+          const msg = args
+            .map((a) => {
+              if (typeof a === "object") {
+                try {
+                  return JSON.stringify(a, null, 2);
+                } catch (e) {
+                  return "[object]";
+                }
+              } else {
+                return String(a);
+              }
+            })
+            .join(" ");
+          const entry = document.createElement("div");
+          entry.textContent = msg;
+          debugLog.appendChild(entry);
+          // Auto-scroll to bottom
+          debugLog.scrollTop = debugLog.scrollHeight;
+        };
+      })();
+    </script>
+  </body>
+</html>
