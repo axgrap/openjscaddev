@@ -23,8 +23,8 @@ const { geom2, path2 } = geometries;
 const CONSTANTS = {
     PHI: (1 + Math.sqrt(5)) / 2,
     R: 100,
-    STRUT_SEGMENTS: 8, // Reduced from 16
-    SPHERE_SEGMENTS: 12, // Reduced from default 24
+    STRUT_SEGMENTS: 5, // Reduced from 16
+    SPHERE_SEGMENTS: 6 // Reduced from default 24
 };
 
 // Canonical icosahedron vertices with clear labels and north pole on top
@@ -225,10 +225,10 @@ const HubUtils = {
                 const y = vec3.dot(v, binormal);
                 return Math.atan2(y, x);
             });
-            // Sort basePoints by angle (anticlockwise)
+            // Sort basePoints by angle
             basePoints = basePoints
                 .map((pt, i) => ({ pt, angle: angles[i] }))
-                .sort((a, b) => b.angle - a.angle)
+                .sort((a, b) => a.angle - b.angle)
                 .map((obj) => obj.pt);
         }
         // Polyhedron points: vertex first, then all base points
@@ -241,16 +241,16 @@ const HubUtils = {
         //Put the inner face at the end of the faces array
         facesArr = [
             ...facesArr,
-            Array.from({ length: basePoints.length }, (v, k) => k + 1),
+            Array.from({ length: basePoints.length }, (v, k) => k + 1).reverse(),
         ];
         // Create the polyhedron
         let hub = primitives.polyhedron({
             points,
             faces: facesArr,
-            orientation: "inward",
+            orientation: "outward",
         });
         // Expand the polyhedron outward
-        hub = expansions.expand({ delta: expansion, segments: 16 }, hub);
+        hub = expansions.expand({ delta: expansion, segments: CONSTANTS.SPHERE_SEGMENTS }, hub);
 
         // Add sheaths for each strut
         for (const other of connected) {
@@ -298,13 +298,7 @@ const HubUtils = {
                     );
                 }
                 hub = booleans.union(hub, sheath);
-            }
-        }
-
-        // Subtract strut cutters
-        for (const other of connected) {
-            const cutter = strutStore.getStrutByEndpoints(vertex, other);
-            if (cutter) {
+                const cutter = strutStore.getStrutByEndpoints(vertex, other);
                 hub = booleans.subtract(hub, cutter.strut);
             }
         }
@@ -522,13 +516,13 @@ export function getParameterDefinitions() {
         {
             name: "showFaces",
             type: "checkbox",
-            checked: true,
+            checked: false,
             caption: "Show Faces",
         },
         {
             name: "showStruts",
             type: "checkbox",
-            checked: true,
+            checked: false,
             caption: "Show Struts",
         },
         {
@@ -549,16 +543,6 @@ export function getParameterDefinitions() {
             max: 0.5,
             step: 0.01,
             caption: "Strut Percent",
-            visible: (params) => params.showStruts !== false,
-        },
-        {
-            name: "strutShrinkPercent",
-            type: "number",
-            initial: 0.1,
-            min: 0.1,
-            max: 0.5,
-            step: 0.01,
-            caption: "Strut Shrink Percent",
             visible: (params) => params.showStruts !== false,
         },
         {
@@ -695,7 +679,6 @@ export function main(params) {
         showVertexLabels,
         hubExpansion,
         strutPercent,
-        strutShrinkPercent,
         sheathScale,
         sheathLengthPercent,
         showFaces,
@@ -762,13 +745,22 @@ export function main(params) {
     // Generate faces based on frequency
     const faces = generateGeodesicFaces(frequency, baseRadius);
 
+    const shrinkPercent = calculateGlobalStrutShrinkPercent(
+        faces,           // your Faces object
+        strutType,       // 'cylindrical' or 'rectangular'
+        scaledStrutHeight, // for cylindrical: radius
+        scaledStrutWidth,  // for rectangular: width
+        scaledStrutHeight  // for rectangular: height
+        // optional: typicalStrutLength (otherwise uses minimum found)
+    )
+
     // Create struts and store them
     const { objects: strutObjects, strutStore } = createStruts(
         faces.getEdges(),
         scaledStrutHeight,
         scaledStrutWidth,
         strutType,
-        strutShrinkPercent,
+        shrinkPercent,
         debugStep
     );
 
@@ -789,6 +781,8 @@ export function main(params) {
 
     // Create the parent structure
     const dome = new DomeStructure({ faces, hubs: hubStore, struts: strutStore });
+
+
 
     const objects = [];
     if (showVertexLabels) {
@@ -1000,13 +994,14 @@ function cylinderFromTo(p1, p2, radius, segments, shrink = 0) {
     let dy = p2[1] - p1[1];
     let dz = p2[2] - p1[2];
     let height = Math.sqrt(sqr(dx) + sqr(dy) + sqr(dz));
-    // Shorten the strut at both ends
-    if (shrink > 0 && height > 2 * shrink) {
+    // Interpret shrink as a percentage (0-1) of the total length to remove
+    if (shrink > 0 && shrink < 1 && height > 1e-8) {
+        const shrinkAmount = height * shrink * 0.5; // remove shrink% of length, split at both ends
         const ux = dx / height,
             uy = dy / height,
             uz = dz / height;
-        p1 = [p1[0] + ux * shrink, p1[1] + uy * shrink, p1[2] + uz * shrink];
-        p2 = [p2[0] - ux * shrink, p2[1] - uy * shrink, p2[2] - uz * shrink];
+        p1 = [p1[0] + ux * shrinkAmount, p1[1] + uy * shrinkAmount, p1[2] + uz * shrinkAmount];
+        p2 = [p2[0] - ux * shrinkAmount, p2[1] - uy * shrinkAmount, p2[2] - uz * shrinkAmount];
         dx = p2[0] - p1[0];
         dy = p2[1] - p1[1];
         dz = p2[2] - p1[2];
@@ -1256,7 +1251,7 @@ function createStruts(
     scaledStrutHeight,
     scaledStrutWidth,
     strutType,
-    shrink = 0,
+    strutShrinkPercent = 0,
     debugStep = 0
 ) {
     const objects = [];
@@ -1268,16 +1263,16 @@ function createStruts(
         const v2 = edge[1];
         let strut;
         if (strutType == "linear") {
-            strut = cylinderFromTo(v1, v2, 0.1 * scaledStrutHeight, 4, shrink); // 4 segments, very thin
+            strut = cylinderFromTo(v1, v2, 0.1 * scaledStrutHeight, 4, strutShrinkPercent); // 4 segments, very thin
         } else if (strutType == "cylindrical") {
-            strut = cylinderFromTo(v1, v2, scaledStrutHeight, CONSTANTS.STRUT_SEGMENTS, shrink);
+            strut = cylinderFromTo(v1, v2, scaledStrutHeight, CONSTANTS.STRUT_SEGMENTS, strutShrinkPercent);
         } else if (strutType == "rectangular") {
             strut = cuboidFromTo(
                 v1,
                 v2,
                 scaledStrutWidth,
                 scaledStrutHeight,
-                shrink,
+                strutShrinkPercent,
                 debugStep
             );
         }
@@ -1357,4 +1352,59 @@ function subdivideFace(face, frequency, radius) {
         }
     }
     return triangles;
+}
+
+/**
+ * Calculates the global shrink percentage needed to prevent any strut overlap at any vertex in the dome.
+ * Finds the smallest angle between any two struts at any vertex, and uses that to compute the shrink percentage.
+ * @param {Faces} faces - The Faces object containing all triangles.
+ * @param {string} strutType - 'cylindrical' or 'rectangular'.
+ * @param {number} strutRadius - For cylindrical: radius. For rectangular: half the width or height (whichever is larger in the plane of intersection).
+ * @param {number} strutWidth - For rectangular struts.
+ * @param {number} strutHeight - For rectangular struts.
+ * @param {number} typicalStrutLength - Typical or minimum strut length to use for conservative shrink percentage.
+ * @returns {number} shrink percentage (0-1)
+ */
+function calculateGlobalStrutShrinkPercent(faces, strutType, strutRadius, strutWidth = null, strutHeight = null, typicalStrutLength = null) {
+    // For each vertex, get all connected vertices
+    const vertices = faces.getVertices();
+    let minAngle = Math.PI;
+    let minStrutLength = Infinity;
+    for (const vertex of vertices) {
+        // Find all connected vertices
+        const connected = faces.getEdges()
+            .filter(edge => (vec3.equals(edge[0], vertex) || vec3.equals(edge[1], vertex)))
+            .map(edge => (vec3.equals(edge[0], vertex) ? edge[1] : edge[0]))
+            .filter((pt, idx, arr) => arr.findIndex(other => vec3.equals(pt, other)) === idx);
+        // Direction vectors
+        const directions = connected.map(v => {
+            const dx = v[0] - vertex[0];
+            const dy = v[1] - vertex[1];
+            const dz = v[2] - vertex[2];
+            const len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+            if (len < 1e-8) return [0, 0, 0];
+            // Track minimum strut length
+            if (len < minStrutLength) minStrutLength = len;
+            return [dx / len, dy / len, dz / len];
+        });
+        // Find minimum angle at this vertex
+        for (let i = 0; i < directions.length; i++) {
+            for (let j = i + 1; j < directions.length; j++) {
+                const dot = directions[i][0] * directions[j][0] + directions[i][1] * directions[j][1] + directions[i][2] * directions[j][2];
+                const angle = Math.acos(Math.max(-1, Math.min(1, dot)));
+                if (angle < minAngle) minAngle = angle;
+            }
+        }
+    }
+    // Determine effective radius for shrink calculation
+    let effectiveRadius = strutRadius;
+    if (strutType === 'rectangular' && strutWidth !== null && strutHeight !== null) {
+        effectiveRadius = 0.5 * Math.sqrt(strutWidth * strutWidth + strutHeight * strutHeight);
+    }
+    // Use the minimum strut length found, unless a typicalStrutLength is provided
+    const strutLength = typicalStrutLength || minStrutLength;
+    // Safe penetration distance
+    const d = effectiveRadius / Math.sin(minAngle / 2);
+    // Shrink percentage
+    return Math.min(1, (2 * d) / strutLength);
 }
