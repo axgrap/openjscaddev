@@ -16,7 +16,7 @@ const { colorize } = colors;
 const { geom2, path2 } = geometries;
 
 // TODO: Implement a way to make a dome by adding a sphere percentage parameter which sets the percent of the sphere above the z axis, by raising or lowering all of the vertices, slices off the vertices below 0, and adding vertices where the struts intersect with the 0 z axis.  There may need to be new hub logic introduced for these "base" hubs.  The base hubs could also be created not by percent but by face layer...
-// TODO: Create a hub type where instead of a sheath there would be an extrusion that would be pushed into a hollow tube like pvc or conduit.
+// TODO: Create a hub type where instead of a sheath there would be an extrusion that would be pushed into a hollow strut like pvc or conduit.
 
 
 // Performance optimization and geometric constants
@@ -180,7 +180,8 @@ const HubUtils = {
         expansion = 3,
         strutStore,
         sheathScale = 1.25,
-        sheathLengthPercent = 0.2
+        sheathLengthPercent = 0.2,
+        shrinkPercent = 0
     ) {
         // Use faces.getEdges() to find all edges connected to this vertex
         const connected = faces
@@ -239,9 +240,10 @@ const HubUtils = {
             facesArr.push([0, 1 + i, 1 + ((i + 1) % basePoints.length)]);
         }
         //Put the inner face at the end of the faces array
+        const vertFace = Array.from({ length: basePoints.length }, (v, k) => k + 1).reverse()
         facesArr = [
             ...facesArr,
-            Array.from({ length: basePoints.length }, (v, k) => k + 1).reverse(),
+            vertFace,
         ];
         // Create the polyhedron
         let hub = primitives.polyhedron({
@@ -277,6 +279,7 @@ const HubUtils = {
                     vertex[2] + norm[2] * sheathLength,
                 ];
                 let sheath;
+
                 if (strutInfo.strutType === "rectangular") {
                     sheath = cuboidFromTo(
                         sheathStart,
@@ -774,7 +777,8 @@ export function main(params) {
             hubExpansion,
             strutStore,
             sheathScale,
-            sheathLengthPercent
+            sheathLengthPercent,
+            shrinkPercent
         );
         hubStore.addHub(polyHub, vertex);
     }
@@ -988,6 +992,22 @@ function cuboidFromTo(p1, p2, width, height, shrink = 0, debugStep = 0) {
     }
 }
 
+function shrinkFromTo(p1, p2, shrink) {
+    const sqr = (x) => x * x;
+    let dx = p2[0] - p1[0];
+    let dy = p2[1] - p1[1];
+    let dz = p2[2] - p1[2];
+    let height = Math.sqrt(sqr(dx) + sqr(dy) + sqr(dz));
+    if (shrink > 0 && shrink < 1 && height > 1e-8) {
+        const shrinkAmount = height * shrink * 0.5; // remove shrink% of length, split at both ends 
+        const ux = dx / height,
+            uy = dy / height,
+            uz = dz / height;
+        p1 = [p1[0] + ux * shrinkAmount, p1[1] + uy * shrinkAmount, p1[2] + uz * shrinkAmount];
+        p2 = [p2[0] - ux * shrinkAmount, p2[1] - uy * shrinkAmount, p2[2] - uz * shrinkAmount];
+    }
+    return { p1, p2 };
+}
 function cylinderFromTo(p1, p2, radius, segments, shrink = 0) {
     const sqr = (x) => x * x;
     let dx = p2[0] - p1[0];
