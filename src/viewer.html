@@ -66,6 +66,33 @@
       #togglePanelBtn:hover {
         background: #555;
       }
+      #downloadBtn {
+        display: block;
+        background: #4caf50;
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 1em;
+        cursor: pointer;
+        margin-top: 8px;
+        width: 100%;
+        transition: background 0.2s;
+      }
+      #downloadBtn:hover {
+        background: #45a049;
+      }
+      #downloadBtn:disabled {
+        background: #cccccc;
+        cursor: not-allowed;
+      }
+      #formatSelect {
+        margin-bottom: 8px;
+        width: 100%;
+        padding: 4px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+      }
       #debugPanel {
         position: absolute;
         left: 20px;
@@ -140,6 +167,11 @@
       </select>
       <button id="togglePanelBtn" type="button">Parameters &#9660;</button>
       <form id="paramForm"></form>
+      <select id="formatSelect">
+        <option value="stl">STL</option>
+        <option value="obj">OBJ</option>
+      </select>
+      <button id="downloadBtn" type="button">Download Model</button>
     </div>
     <div id="jscad"></div>
     <div id="debugPanel" class="collapsed">
@@ -333,9 +365,265 @@
       fileSelect.addEventListener("change", (e) => {
         loadModule(e.target.value);
       });
+      // Download functionality
+      async function downloadModel() {
+        const downloadBtn = document.getElementById("downloadBtn");
+        const formatSelect = document.getElementById("formatSelect");
+        const format = formatSelect.value;
+
+        downloadBtn.disabled = true;
+        downloadBtn.textContent = "Generating...";
+
+        try {
+          // Get current parameters and generate solids
+          const params = getParamsFromForm();
+          const solids = main(params);
+
+          // Try to use the modeling library's built-in serialization if available
+          let data;
+          if (format === "stl") {
+            // Simple STL export using the modeling library
+            data = generateSTL(solids);
+          } else if (format === "obj") {
+            // Simple OBJ export using the modeling library
+            data = generateOBJ(solids);
+          }
+
+          // Create and download the file
+          const blob = new Blob([data], { type: "application/octet-stream" });
+          const url = URL.createObjectURL(blob);
+
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = `geodesic_dome.${format}`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+
+          URL.revokeObjectURL(url);
+
+          console.log(`Model exported as ${format.toUpperCase()}`);
+        } catch (error) {
+          console.error("Export failed:", error);
+          alert("Export failed. Check console for details.");
+        } finally {
+          downloadBtn.disabled = false;
+          downloadBtn.textContent = "Download Model";
+        }
+      }
+
+      // Simple STL generator
+      function generateSTL(solids) {
+        let stl = "solid geodesic_dome\n";
+
+        console.log("STL Debug - Solids structure:", solids);
+        console.log("STL Debug - Number of solids:", solids.length);
+
+        for (let i = 0; i < solids.length; i++) {
+          const solid = solids[i];
+          console.log(`STL Debug - Solid ${i}:`, solid);
+          console.log(`STL Debug - Solid ${i} keys:`, Object.keys(solid));
+
+          // Handle different JSCAD geometry types
+          if (solid.geometries) {
+            console.log(
+              `STL Debug - Solid ${i} has geometries:`,
+              solid.geometries
+            );
+            // If it's a group or union, process each geometry
+            for (const geom of solid.geometries) {
+              stl += processGeometryForSTL(geom);
+            }
+          } else if (solid.polygons) {
+            console.log(
+              `STL Debug - Solid ${i} has polygons:`,
+              solid.polygons.length
+            );
+            // Direct polygon data
+            stl += processPolygonsForSTL(solid.polygons);
+          } else if (solid.vertices && solid.indices) {
+            console.log(`STL Debug - Solid ${i} has indexed geometry`);
+            // Indexed geometry
+            stl += processIndexedGeometryForSTL(solid.vertices, solid.indices);
+          } else if (solid.polygons && solid.polygons.length > 0) {
+            console.log(
+              `STL Debug - Solid ${i} has direct polygons:`,
+              solid.polygons.length
+            );
+            stl += processPolygonsForSTL(solid.polygons);
+          } else {
+            // Try to access the geometry data
+            console.log("STL Debug - Unknown solid structure:", solid);
+            console.log(
+              "STL Debug - Available properties:",
+              Object.getOwnPropertyNames(solid)
+            );
+          }
+        }
+
+        console.log("STL Debug - Final STL length:", stl.length);
+        stl += "endsolid geodesic_dome\n";
+        return stl;
+      }
+
+      function processGeometryForSTL(geometry) {
+        if (geometry.polygons) {
+          return processPolygonsForSTL(geometry.polygons);
+        } else if (geometry.vertices && geometry.indices) {
+          return processIndexedGeometryForSTL(
+            geometry.vertices,
+            geometry.indices
+          );
+        }
+        return "";
+      }
+
+      function processPolygonsForSTL(polygons) {
+        console.log("STL Debug - Processing polygons:", polygons.length);
+        let stl = "";
+        let processedCount = 0;
+
+        for (const polygon of polygons) {
+          console.log("STL Debug - Polygon structure:", polygon);
+          console.log("STL Debug - Polygon keys:", Object.keys(polygon));
+
+          if (polygon.vertices && polygon.vertices.length >= 3) {
+            console.log(
+              "STL Debug - Processing polygon with vertices:",
+              polygon.vertices.length
+            );
+
+            // Calculate normal (simplified - just use first 3 vertices)
+            const v0 = polygon.vertices[0];
+            const v1 = polygon.vertices[1];
+            const v2 = polygon.vertices[2];
+
+            console.log("STL Debug - Vertices:", v0, v1, v2);
+
+            const ux = v1[0] - v0[0];
+            const uy = v1[1] - v0[1];
+            const uz = v1[2] - v0[2];
+
+            const vx = v2[0] - v0[0];
+            const vy = v2[1] - v0[1];
+            const vz = v2[2] - v0[2];
+
+            const nx = uy * vz - uz * vy;
+            const ny = uz * vx - ux * vz;
+            const nz = ux * vy - uy * vx;
+
+            const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            const normalX = len > 0 ? nx / len : 0;
+            const normalY = len > 0 ? ny / len : 0;
+            const normalZ = len > 0 ? nz / len : 0;
+
+            const facetData = `  facet normal ${normalX.toFixed(
+              6
+            )} ${normalY.toFixed(6)} ${normalZ.toFixed(6)}\n    outer loop\n`;
+            stl += facetData;
+
+            for (const vertex of polygon.vertices) {
+              const vertexData = `      vertex ${vertex[0].toFixed(
+                6
+              )} ${vertex[1].toFixed(6)} ${vertex[2].toFixed(6)}\n`;
+              stl += vertexData;
+            }
+
+            stl += "    endloop\n  endfacet\n";
+            processedCount++;
+          } else {
+            console.log(
+              "STL Debug - Skipping polygon with insufficient vertices:",
+              polygon
+            );
+          }
+        }
+
+        console.log("STL Debug - Processed facets:", processedCount);
+        console.log("STL Debug - Current STL length:", stl.length);
+        return stl;
+      }
+
+      function processIndexedGeometryForSTL(vertices, indices) {
+        let stl = "";
+        for (let i = 0; i < indices.length; i += 3) {
+          const v0 = vertices[indices[i]];
+          const v1 = vertices[indices[i + 1]];
+          const v2 = vertices[indices[i + 2]];
+
+          // Calculate normal
+          const ux = v1[0] - v0[0];
+          const uy = v1[1] - v0[1];
+          const uz = v1[2] - v0[2];
+
+          const vx = v2[0] - v0[0];
+          const vy = v2[1] - v0[1];
+          const vz = v2[2] - v0[2];
+
+          const nx = uy * vz - uz * vy;
+          const ny = uz * vx - ux * vz;
+          const nz = ux * vy - uy * vx;
+
+          const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+          const normalX = len > 0 ? nx / len : 0;
+          const normalY = len > 0 ? ny / len : 0;
+          const normalZ = len > 0 ? nz / len : 0;
+
+          stl += `  facet normal ${normalX.toFixed(6)} ${normalY.toFixed(
+            6
+          )} ${normalZ.toFixed(6)}\n`;
+          stl += "    outer loop\n";
+          stl += `      vertex ${v0[0].toFixed(6)} ${v0[1].toFixed(
+            6
+          )} ${v0[2].toFixed(6)}\n`;
+          stl += `      vertex ${v1[0].toFixed(6)} ${v1[1].toFixed(
+            6
+          )} ${v1[2].toFixed(6)}\n`;
+          stl += `      vertex ${v2[0].toFixed(6)} ${v2[1].toFixed(
+            6
+          )} ${v2[2].toFixed(6)}\n`;
+          stl += "    endloop\n";
+          stl += "  endfacet\n";
+        }
+        return stl;
+      }
+
+      // Simple OBJ generator
+      function generateOBJ(solids) {
+        let obj = "# Geodesic Dome\n";
+        let vertexIndex = 1;
+        const vertexMap = new Map();
+
+        for (const solid of solids) {
+          if (solid.polygons) {
+            for (const polygon of solid.polygons) {
+              const faceIndices = [];
+              for (const vertex of polygon.vertices) {
+                const key = `${vertex[0].toFixed(6)},${vertex[1].toFixed(
+                  6
+                )},${vertex[2].toFixed(6)}`;
+                if (!vertexMap.has(key)) {
+                  vertexMap.set(key, vertexIndex++);
+                  obj += `v ${vertex[0].toFixed(6)} ${vertex[1].toFixed(
+                    6
+                  )} ${vertex[2].toFixed(6)}\n`;
+                }
+                faceIndices.push(vertexMap.get(key));
+              }
+              obj += `f ${faceIndices.join(" ")}\n`;
+            }
+          }
+        }
+
+        return obj;
+      }
       // Initial load
       setupRenderer();
       loadModule(fileSelect.value);
+
+      // Setup download button
+      const downloadBtn = document.getElementById("downloadBtn");
+      downloadBtn.addEventListener("click", downloadModel);
       // Animation and controls
       let lastX = 0;
       let lastY = 0;

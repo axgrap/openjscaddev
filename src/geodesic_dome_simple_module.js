@@ -1,21 +1,15 @@
-const {
-    primitives,
-    transforms,
-    maths,
-    colors,
-    text,
-    extrusions,
-    geometries,
-    booleans,
-    expansions,
-} = jscadModeling;
+// @jscad
+// title: Geodesic Dome Simple (Module)
+// author: Converted for OpenJSCAD.xyz
+
+// Use the global jscadModeling API
+const { primitives, transforms, maths, colors, text, extrusions, geometries, booleans, expansions } = require('@jscad/modeling');
 const { cylinder, sphere, cuboid, polyhedron } = primitives;
 const { translate, rotate, scale } = transforms;
 const { vec3 } = maths;
 const { colorize } = colors;
 const { geom2, path2 } = geometries;
-// TODO: https://groups.google.com/g/geodesichelp/c/zG4Mm__cVHI get all these calculations and measurements from here and document them in each object.
-// TODO: Create a hub type where instead of a sheath there would be an extrusion that would be pushed into a hollow strut like pvc or conduit.
+
 
 
 // Performance optimization and geometric constants
@@ -548,7 +542,7 @@ class DomeStructure {
     }
 }
 
-export function getParameterDefinitions() {
+function getParameterDefinitions() {
     // Toggles for major components
     const toggles = [
         {
@@ -592,8 +586,7 @@ export function getParameterDefinitions() {
             min: 0.1,
             max: 0.5,
             step: 0.01,
-            caption: "Strut Percent",
-            visible: (params) => params.showStruts !== false,
+            caption: "Strut Percent"
         },
         {
             name: "measurementSystem",
@@ -609,16 +602,14 @@ export function getParameterDefinitions() {
             min: 0,
             max: 10,
             step: 0.1,
-            caption: "Hub Expansion",
-            visible: (params) => params.showHubs !== false,
+            caption: "Hub Expansion"
         },
         {
             name: "strutType",
             type: "choice",
             caption: "Strut Type",
             values: ["rectangular", "cylindrical", "linear"],
-            initial: "cylindrical",
-            visible: (params) => params.showStruts !== false || params.showHubs !== false,
+            initial: "cylindrical"
         },
         {
             name: "frequency",
@@ -636,8 +627,7 @@ export function getParameterDefinitions() {
             min: 0.1,
             max: 10,
             step: 0.1,
-            caption: "Strut Height (inches/mm)",
-            visible: (params) => params.showStruts !== false || params.showHubs !== false,
+            caption: "Strut Height (inches/mm)"
         },
         {
             name: "strutWidth",
@@ -646,8 +636,7 @@ export function getParameterDefinitions() {
             min: 0.1,
             max: 10,
             step: 0.1,
-            caption: "Strut Width (inches/mm)",
-            visible: (params) => params.showStruts !== false || params.showHubs !== false,
+            caption: "Strut Width (inches/mm)"
         },
         {
             name: "sphereRadius",
@@ -674,8 +663,7 @@ export function getParameterDefinitions() {
             min: 1.0,
             max: 2.0,
             step: 0.01,
-            caption: "Sheath Scale",
-            visible: (params) => params.showHubs !== false,
+            caption: "Sheath Scale"
         },
         {
             name: "sheathLengthPercent",
@@ -684,8 +672,7 @@ export function getParameterDefinitions() {
             min: 1,
             max: 100,
             step: 1,
-            caption: "Sheath Length Percent",
-            visible: (params) => params.showHubs !== false,
+            caption: "Sheath Length Percent"
         },
         {
             name: "domePercent",
@@ -707,8 +694,7 @@ export function getParameterDefinitions() {
             min: 0,
             max: 12,
             step: 1,
-            caption: "Debug Step",
-            visible: (params) => params.showStruts !== false,
+            caption: "Debug Step"
         },
         {
             name: "showVertexLabels",
@@ -722,7 +708,7 @@ export function getParameterDefinitions() {
     return [...toggles, ...functionalParams, ...debugParams];
 }
 
-export function main(params) {
+function main(params) {
     console.log("=== Geodesic Dome Simple - Main Function Start ===");
     console.log("Parameters:", params);
 
@@ -1643,3 +1629,5 @@ function getDomeZCutoff(radius, domePercent) {
     // Let's use: zcut = radius - 2*radius*domePercent
     return radius - 2 * radius * domePercent;
 }
+
+module.exports = { getParameterDefinitions, main }; 
